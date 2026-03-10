@@ -13,7 +13,7 @@ Author(s):
 ACP needs a standard remote transport. We propose adopting **MCP Streamable HTTP** (2025-11-25) with ACP-specific headers, and extending it with a **WebSocket upgrade** on the same endpoint. A single `/acp` endpoint serves three connectivity profiles:
 
 - **Streamable HTTP (POST/GET/DELETE)** — stateless-friendly, SSE-based streaming, aligned with MCP Streamable HTTP.
-- **WebSocket upgrade (GET with `Upgrade: websocket`)** — persistent, full-duplex, low-latency bidirectional messaging.
+- **WebSocket upgrade (GET with `Upgrade: websocket`)** — persistent, full-duplex, low-latency bidirectional messaging. Clients MUST support this.
 - **stdio** — unchanged local subprocess transport.
 
 All three share the same JSON-RPC message format and ACP lifecycle.
@@ -45,7 +45,11 @@ A GET with `Upgrade: websocket` upgrades to a persistent bidirectional channel �
 
 This is important for ACP, as its more bidirectional in its nature as a protocol
 
-### 3. Defines a unified routing model
+### 3. Requires cookie support on HTTP transports
+
+Clients MUST accept, store, and return cookies set by the server on all HTTP-based transports (Streamable HTTP and WebSocket). Cookies MUST be sent on subsequent requests to the server for the duration of the session. Clients MAY discard all cookies when a session is complete. This allows servers to rely on cookies for session affinity (e.g., sticky sessions behind a load balancer) and other small amounts of per-session state.
+
+### 4. Defines a unified routing model
 
 | Method | Upgrade Header? | Behavior |
 |--------|-----------------|----------|
@@ -54,7 +58,7 @@ This is important for ACP, as its more bidirectional in its nature as a protocol
 | `GET` | `Upgrade: websocket` | Upgrade to WebSocket for full-duplex messaging |
 | `DELETE` | — | Terminate the session |
 
-### 4. Preserves the full ACP lifecycle
+### 5. Preserves the full ACP lifecycle
 
 The `initialize` → `initialized` → messages → close lifecycle is identical regardless of transport. Session state is keyed by `Acp-Session-Id` and is transport-agnostic.
 
@@ -63,8 +67,8 @@ The `initialize` → `initialized` → messages → close lifecycle is identical
 > How will things play out once this feature exists?
 
 - **SDK implementers** get a clear, testable transport spec — Rust, TypeScript, and Python SDKs can all interoperate.
-- **Desktop clients** use WebSocket for low-latency streaming, falling back to Streamable HTTP behind restrictive proxies.
-- **Cloud deployments** expose agents behind standard HTTP load balancers using the stateless-friendly HTTP mode, and improved cookie handling for sticky sessions.
+- **Desktop clients** use WebSocket for low-latency streaming; all clients support it as a baseline.
+- **Cloud deployments** expose agents behind standard HTTP load balancers using the stateless-friendly HTTP mode, with cookie-based sticky sessions guaranteed by client support.
 - **MCP compatibility** is maintained — the HTTP transport is a superset of MCP Streamable HTTP.
 - **Proxy chains** can route ACP traffic over HTTP for multi-hop agent topologies.
 
@@ -266,9 +270,10 @@ The agent task is spawned once per session. The transport layer adapts channels 
 ### Deviations from MCP Streamable HTTP
 
 1. **Header naming**: `Acp-Session-Id` / `Acp-Protocol-Version` instead of MCP equivalents, to avoid collision when an ACP agent is also an MCP client.
-2. **WebSocket extension**: MCP doesn't define WebSocket. ACP adds it as an optional upgrade. Agent servers MAY support it.
-3. **No batch requests**: Returns 501. May be added later.
-4. **No resumability yet in reference implementation**: SSE event IDs and `Last-Event-ID` resumption planned as follow-up.
+2. **WebSocket extension**: MCP doesn't define WebSocket. ACP adds it as a required client capability. Clients MUST support WebSocket, and servers MAY choose to only support WebSocket connections.
+3. **Cookie support required**: Clients MUST handle cookies on HTTP transports for the duration of the session, enabling sticky sessions and per-session server state.
+4. **No batch requests**: Returns 501. May be added later.
+5. **No resumability yet in reference implementation**: SSE event IDs and `Last-Event-ID` resumption planned as follow-up.
 
 ### Implementation Plan
 
@@ -287,7 +292,7 @@ We largely do. The only differences are header naming (`Acp-Session-Id` vs `MCP-
 
 ### Why add WebSocket support?
 
-A single `prompt` can generate dozens of streaming updates and ACP is more bidirectional in nature than MCP. With Streamable HTTP, the server can only push via SSE on POST responses or a separate GET stream. WebSocket provides true bidirectional messaging, lower per-message overhead, and connection persistence. It's optional — Streamable HTTP is always the fallback.
+A single `prompt` can generate dozens of streaming updates and ACP is more bidirectional in nature than MCP. With Streamable HTTP, the server can only push via SSE on POST responses or a separate GET stream. WebSocket provides true bidirectional messaging, lower per-message overhead, and connection persistence. Clients MUST support WebSocket so that servers can choose to only support WebSocket connections, simplifying deployment. Streamable HTTP remains available as an additional option for environments where WebSocket is not viable on the server side (e.g., serverless).
 
 ### How does the server distinguish WebSocket from SSE on GET?
 
