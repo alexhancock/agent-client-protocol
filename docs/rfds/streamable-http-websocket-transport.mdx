@@ -10,13 +10,14 @@ Author(s):
 
 > What are you proposing to change?
 
-ACP needs a standard remote transport. We propose adopting **MCP Streamable HTTP** (2025-11-25) with ACP-specific headers, and extending it with a **WebSocket upgrade** on the same endpoint. A single `/acp` endpoint serves three connectivity profiles:
+ACP needs a standard remote transport. We propose adopting **MCP Streamable HTTP** (2025-11-25) with ACP-specific headers, and extending it with a **WebSocket upgrade** on the same endpoint. A single `/acp` endpoint supports two connectivity profiles:
 
 - **Streamable HTTP (POST/GET/DELETE)** — stateless-friendly, SSE-based streaming, aligned with MCP Streamable HTTP.
-- **WebSocket upgrade (GET with `Upgrade: websocket`)** — persistent, full-duplex, low-latency bidirectional messaging. Clients MUST support this.
-- **stdio** — unchanged local subprocess transport.
+- **WebSocket upgrade (GET with `Upgrade: websocket`)** — persistent, full-duplex, low-latency bidirectional messaging.
 
-All three share the same JSON-RPC message format and ACP lifecycle.
+Clients that support remote ACP over HTTP MUST support both Streamable HTTP and WebSocket. This allows servers to support only WebSocket if they choose, simplifying deployment.
+
+Both profiles share the same JSON-RPC message format and ACP lifecycle as the existing **stdio** local subprocess transport.
 
 ## Status quo
 
